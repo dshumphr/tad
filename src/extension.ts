@@ -40,7 +40,8 @@ async function editSelection(directReplace: boolean) {
     if (directReplace) {
       applyChanges(editor.document.uri, response, selection);
     } else {
-      await showDiff(editor.document.uri, response, selection);
+      const newText = selectedText + '\n' + response;
+      applyChanges(editor.document.uri, newText, selection);
     }
   }
 }
@@ -67,7 +68,7 @@ async function callAI(content: string, buildContent: string, filePath: string): 
     <Project>${buildContent}</Project>
     Here's a file within that project which has "AI" annotations where some action needs to take place. Please take action and generate the next version of this file. Respond with code only.
     <FileName>${path.basename(filePath)}</FileName>
-    <FileContent><![CDATA[${content}]]></FileContent>
+    <FileContent>${content}</FileContent>
   `;
 
   return await callClaudeAPI(xmlRequest);
@@ -146,7 +147,6 @@ async function handleSave(document: vscode.TextDocument) {
     
       // Execute the delete function when needed
       await deleteAIDocument();
-      //await vscode.workspace.fs.delete(aiDocument.uri);
       aiDocument = undefined;
       originalUri = undefined;
     } catch (error) {
