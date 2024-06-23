@@ -2,6 +2,12 @@
 
 Tad is a VS Code extension that leverages AI to assist with code editing. It uses Claude Sonnet to provide intelligent code suggestions and transformations directly within your editor.
 
+## How It Works
+
+Tad reads the `AI.md` file in your workspace root to understand your project context and preferences. This file acts as a guide for the AI, allowing you to customize its behavior and provide project-specific information.
+
+Experiment with different content in your `AI.md` file to fine-tune Tad's performance and tailor it to your specific needs.
+
 ## Features
 
 - AI-powered code rewriting
