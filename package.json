@@ -2,7 +2,7 @@
   "name": "tad",
   "displayName": "tad",
   "description": "AI Editor",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.81.0"
   },
@@ -28,6 +28,10 @@
       {
         "command": "tad.editSelectionAppend",
         "title": "Edit Selection w AI and Append"
+      },
+      {
+        "command": "tad.editSelectionWithCompare",
+        "title": "Edit Selection w AI and Compare"
       }
     ]
   },

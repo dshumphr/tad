@@ -11,6 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('tad.editFileWithCompare', () => editFile(false)),
     vscode.commands.registerCommand('tad.editSelectionDirectReplace', () => editSelection(true)),
     vscode.commands.registerCommand('tad.editSelectionAppend', () => editSelection(false)),
+    vscode.commands.registerCommand('tad.editSelectionWithCompare', () => editSelectionWithCompare()),
     vscode.workspace.onDidSaveTextDocument(handleSave)
   );
 }
@@ -43,6 +44,25 @@ async function editSelection(directReplace: boolean) {
       const newText = selectedText + '\n' + response;
       applyChanges(editor.document.uri, newText, selection);
     }
+  }
+}
+
+async function editSelectionWithCompare() {
+  const editor = vscode.window.activeTextEditor;
+  if (editor) {
+    const selection = editor.selection;
+    const selectedText = editor.document.getText(selection);
+    const buildContent = await getBuildFileContent();
+    const response = await callAI(selectedText, buildContent, editor.document.fileName);
+
+    // Create a new content by replacing the selected text with the AI response
+    const originalContent = editor.document.getText();
+    const newContent =
+      originalContent.substring(0, editor.document.offsetAt(selection.start)) +
+      response +
+      originalContent.substring(editor.document.offsetAt(selection.end));
+
+    await showDiff(editor.document.uri, newContent, selection);
   }
 }
 
@@ -81,17 +101,15 @@ async function showDiff(fileUri: vscode.Uri, aiResponse: string, selection: vsco
 
   await vscode.workspace.fs.writeFile(uri, Buffer.from('', 'utf8'));
   await vscode.commands.executeCommand('vscode.diff', fileUri, uri, 'Original ↔ AI-generated (Editable)');
-  const editor = vscode.window.visibleTextEditors.find(editor => 
+  const editor = vscode.window.visibleTextEditors.find(editor =>
     editor.document.uri.toString() === uri.toString()
   );
-
+  
   if (editor) {
-      vscode.window.showInformationMessage('Right side editor found');
-
       // Apply an edit to insert text in the right side editor
-      await editor.edit(editBuilder => {
-          editBuilder.insert(new vscode.Position(0, 0), aiResponse);
-      });
+    await editor.edit(editBuilder => {
+      editBuilder.insert(new vscode.Position(0, 0), aiResponse);
+    });
   }
   aiDocument = await vscode.workspace.openTextDocument(uri);
 
@@ -120,14 +138,17 @@ async function handleSave(document: vscode.TextDocument) {
   if (aiDocument && document.uri.toString() === aiDocument.uri.toString() && originalUri) {
     try {
       const edit = new vscode.WorkspaceEdit();
+      const originalDocument = await vscode.workspace.openTextDocument(originalUri);
+      const originalLastLine = originalDocument.lineAt(originalDocument.lineCount - 1);
+
       edit.replace(
         originalUri,
-        new vscode.Range(0, 0, document.lineCount, 0),
+        new vscode.Range(0, 0, originalDocument.lineCount - 1, originalLastLine.text.length),
         document.getText()
       );
       await vscode.workspace.applyEdit(edit);
       vscode.window.showInformationMessage("AI-generated changes applied successfully.");
-      
+
       // Close the AI document
       const uri = aiDocument.uri;
       async function deleteAIDocument() {
@@ -137,14 +158,14 @@ async function handleSave(document: vscode.TextDocument) {
           for (const editor of aiEditors) {
             await vscode.commands.executeCommand('workbench.action.closeActiveEditor', editor);
           }
-    
+
           // Delete the AI-generated document
           await vscode.workspace.fs.delete(uri);
         } catch (error) {
           console.error('Error deleting AI-generated document:', error);
         }
       }
-    
+
       // Execute the delete function when needed
       await deleteAIDocument();
       aiDocument = undefined;
