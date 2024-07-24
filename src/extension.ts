@@ -7,6 +7,9 @@ let aiDocument: vscode.TextDocument | undefined;
 let originalUri: vscode.Uri | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
+  // Load saved model configuration
+  currentModel = context.globalState.get('currentModel', 'sonnet');
+
   context.subscriptions.push(
     vscode.commands.registerCommand('tad.editFileDirectReplace', () => editFile(true)),
     vscode.commands.registerCommand('tad.editFileWithCompare', () => editFile(false)),
@@ -18,7 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register command to change AI model
   context.subscriptions.push(
-    vscode.commands.registerCommand('tad.changeAIModel', changeAIModel)
+    vscode.commands.registerCommand('tad.changeAIModel', () => changeAIModel(context))
   );
 }
 
@@ -92,7 +95,8 @@ async function getBuildFileContent(): Promise<string> {
 async function callAI(content: string, buildContent: string, filePath: string): Promise<string> {
   const xmlRequest = `
     <Project>${buildContent}</Project>
-    Here's a file within that project which has "AI" annotations where some action needs to take place. Please take action and generate the next version of this file. Respond with code only.
+    Here's a file within that project which has "AI" annotations where some action needs to take place. Please take action and generate the next version of this file. Respond with full code only.
+    Absolutely do not ever wrap the code in any backticks.
     <FileName>${path.basename(filePath)}</FileName>
     <FileContent>${content}</FileContent>
   `;
@@ -183,9 +187,9 @@ async function handleSave(document: vscode.TextDocument) {
 }
 
 // AI model configuration
-let currentModel: string = "sonnet";
+let currentModel: string;
 
-async function changeAIModel() {
+async function changeAIModel(context: vscode.ExtensionContext) {
   const models = ["sonnet", "llama3"];
   const selectedModel = await vscode.window.showQuickPick(models, {
     placeHolder: "Select AI model",
@@ -193,6 +197,8 @@ async function changeAIModel() {
 
   if (selectedModel) {
     currentModel = selectedModel;
+    // Save the selected model
+    await context.globalState.update('currentModel', currentModel);
     vscode.window.showInformationMessage(`AI model changed to ${currentModel}`);
   }
 }
