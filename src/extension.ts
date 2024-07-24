@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
+import Groq from "groq-sdk";
 
 let aiDocument: vscode.TextDocument | undefined;
 let originalUri: vscode.Uri | undefined;
@@ -13,6 +14,11 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('tad.editSelectionAppend', () => editSelection(false)),
     vscode.commands.registerCommand('tad.editSelectionWithCompare', () => editSelectionWithCompare()),
     vscode.workspace.onDidSaveTextDocument(handleSave)
+  );
+
+  // Register command to change AI model
+  context.subscriptions.push(
+    vscode.commands.registerCommand('tad.changeAIModel', changeAIModel)
   );
 }
 
@@ -91,7 +97,7 @@ async function callAI(content: string, buildContent: string, filePath: string): 
     <FileContent>${content}</FileContent>
   `;
 
-  return await callClaudeAPI(xmlRequest);
+  return await callAIAPI(xmlRequest);
 }
 
 async function showDiff(fileUri: vscode.Uri, aiResponse: string, selection: vscode.Selection | null = null) {
@@ -176,8 +182,33 @@ async function handleSave(document: vscode.TextDocument) {
   }
 }
 
+// AI model configuration
+let currentModel: string = "sonnet";
+
+async function changeAIModel() {
+  const models = ["sonnet", "llama3"];
+  const selectedModel = await vscode.window.showQuickPick(models, {
+    placeHolder: "Select AI model",
+  });
+
+  if (selectedModel) {
+    currentModel = selectedModel;
+    vscode.window.showInformationMessage(`AI model changed to ${currentModel}`);
+  }
+}
+
+async function callAIAPI(req: string): Promise<string> {
+  if (currentModel === "sonnet") {
+    return await callClaudeAPI(req);
+  } else if (currentModel === "llama3") {
+    return await callGrokLlamaAPI(req);
+  } else {
+    throw new Error("Unsupported AI model");
+  }
+}
+
+const anthropic = new Anthropic({});
 async function callClaudeAPI(req: string): Promise<string> {
-  const anthropic = new Anthropic({});
   console.log(req);
 
   const msg = await anthropic.messages.create({
@@ -186,6 +217,21 @@ async function callClaudeAPI(req: string): Promise<string> {
     messages: [{ role: "user", content: req }],
   });
   return (msg.content[0] as Anthropic.TextBlock).text;
+}
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+async function callGrokLlamaAPI(req: string): Promise<string> {
+  const msg = await groq.chat.completions.create({
+    messages: [
+      {
+        role: "user",
+        content: req,
+      },
+    ],
+    model: "llama-3.1-70b-versatile",
+  });
+  console.log("Calling Grok Llama 3 API with request:", req);
+  return msg.choices[0]?.message?.content || "";
 }
 
 export function deactivate() {}
