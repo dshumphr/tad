@@ -93,20 +93,10 @@ async function getBuildFileContent(): Promise<string> {
 }
 
 async function callAI(content: string, buildContent: string, filePath: string): Promise<string> {
-  const xmlRequest = `
-    <Project>${buildContent}</Project>
-    Here's a file within that project which has "AI" annotations where some action needs to take place. Please take action and generate the next version of this file. Respond with full code only.
-    Absolutely do not ever wrap the code in any backticks.
-    <FileName>${path.basename(filePath)}</FileName>
-    <FileContent>${content}</FileContent>
-  `;
-
-  const systemPrompt = `
-    <Project>${buildContent}</Project>
-    Here's a file within that project which has "AI" annotations where some action needs to take place. Please take action and generate the next version of this file. Respond with full code only.
-    Absolutely do not ever wrap the code in any backticks.
-    <FileName>${path.basename(filePath)}</FileName>
-  `;
+  const systemPrompt = `<Project>${buildContent}</Project>
+Here's a file within that project which has "AI" annotations where some action needs to take place. Please take action and generate the next version of this file. Respond with full code only.
+Absolutely do not ever wrap the code in any backticks. Remove any "AI" annotations from the output that have been addressed.
+<FileName>${path.basename(filePath)}</FileName>`;
 
   const userPrompt = content;
 
@@ -213,6 +203,7 @@ async function changeAIModel(context: vscode.ExtensionContext) {
 }
 
 async function callAIAPI(systemPrompt: string, userPrompt: string): Promise<string> {
+  console.log(`Model used: ${currentModel}`);
   if (currentModel === "sonnet") {
     return await callClaudeAPI(systemPrompt, userPrompt);
   } else if (currentModel === "llama3") {
