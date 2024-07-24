@@ -101,7 +101,16 @@ async function callAI(content: string, buildContent: string, filePath: string): 
     <FileContent>${content}</FileContent>
   `;
 
-  return await callAIAPI(xmlRequest);
+  const systemPrompt = `
+    <Project>${buildContent}</Project>
+    Here's a file within that project which has "AI" annotations where some action needs to take place. Please take action and generate the next version of this file. Respond with full code only.
+    Absolutely do not ever wrap the code in any backticks.
+    <FileName>${path.basename(filePath)}</FileName>
+  `;
+
+  const userPrompt = content;
+
+  return await callAIAPI(systemPrompt, userPrompt);
 }
 
 async function showDiff(fileUri: vscode.Uri, aiResponse: string, selection: vscode.Selection | null = null) {
@@ -203,40 +212,46 @@ async function changeAIModel(context: vscode.ExtensionContext) {
   }
 }
 
-async function callAIAPI(req: string): Promise<string> {
+async function callAIAPI(systemPrompt: string, userPrompt: string): Promise<string> {
   if (currentModel === "sonnet") {
-    return await callClaudeAPI(req);
+    return await callClaudeAPI(systemPrompt, userPrompt);
   } else if (currentModel === "llama3") {
-    return await callGrokLlamaAPI(req);
+    return await callGrokLlamaAPI(systemPrompt, userPrompt);
   } else {
     throw new Error("Unsupported AI model");
   }
 }
 
 const anthropic = new Anthropic({});
-async function callClaudeAPI(req: string): Promise<string> {
-  console.log(req);
+async function callClaudeAPI(systemPrompt: string, userPrompt: string): Promise<string> {
+  console.log(systemPrompt, userPrompt);
 
   const msg = await anthropic.messages.create({
     model: "claude-3-5-sonnet-20240620",
     max_tokens: 4*1024,
-    messages: [{ role: "user", content: req }],
+    system: systemPrompt,
+    messages: [{role: "user", content: userPrompt }],
   });
   return (msg.content[0] as Anthropic.TextBlock).text;
 }
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-async function callGrokLlamaAPI(req: string): Promise<string> {
+async function callGrokLlamaAPI(systemPrompt: string, userPrompt: string): Promise<string> {
   const msg = await groq.chat.completions.create({
     messages: [
       {
+        role: "system",
+        content: systemPrompt,
+      },
+      {
         role: "user",
-        content: req,
+        content: userPrompt,
       },
     ],
     model: "llama-3.1-70b-versatile",
+    max_tokens: 8*1000-1,
   });
-  console.log("Calling Grok Llama 3 API with request:", req);
+  console.log("Calling Grok Llama 3 API with request:", systemPrompt, userPrompt);
   return msg.choices[0]?.message?.content || "";
 }
 
