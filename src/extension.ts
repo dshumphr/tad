@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 import Groq from "groq-sdk";
+import * as fs from 'fs';
 
 let aiDocument: vscode.TextDocument | undefined;
 let originalUri: vscode.Uri | undefined;
@@ -16,7 +17,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('tad.editSelectionDirectReplace', () => editSelection(true)),
     vscode.commands.registerCommand('tad.editSelectionAppend', () => editSelection(false)),
     vscode.commands.registerCommand('tad.editSelectionWithCompare', () => editSelectionWithCompare()),
-    vscode.workspace.onDidSaveTextDocument(handleSave)
+    vscode.workspace.onDidSaveTextDocument(handleSave),
+    vscode.workspace.onDidCloseTextDocument(handleClose)
   );
 
   // Register command to change AI model
@@ -34,6 +36,7 @@ async function editFile(directReplace: boolean) {
     const response = await callAI(content, buildContent, document.fileName);
     if (directReplace) {
       applyChanges(document.uri, response, null);
+      logPrompt('system', content, response, 'direct');
     } else {
       await showDiff(document.uri, response);
     }
@@ -49,9 +52,11 @@ async function editSelection(directReplace: boolean) {
     const response = await callAI(selectedText, buildContent, editor.document.fileName);
     if (directReplace) {
       applyChanges(editor.document.uri, response, selection);
+      logPrompt('system', selectedText, response, 'direct');
     } else {
       const newText = selectedText + '\n' + response;
       applyChanges(editor.document.uri, newText, selection);
+      logPrompt('system', selectedText, response, 'append');
     }
   }
 }
@@ -100,7 +105,8 @@ Absolutely do not ever wrap the code in any backticks. Remove any "AI" annotatio
 
   const userPrompt = content;
 
-  return await callAIAPI(systemPrompt, userPrompt);
+  const response = await callAIAPI(systemPrompt, userPrompt);
+  return response;
 }
 
 async function showDiff(fileUri: vscode.Uri, aiResponse: string, selection: vscode.Selection | null = null) {
@@ -158,30 +164,45 @@ async function handleSave(document: vscode.TextDocument) {
       await vscode.workspace.applyEdit(edit);
       vscode.window.showInformationMessage("AI-generated changes applied successfully.");
 
+      // Log the applied changes
+      logPrompt('system', originalDocument.getText(), document.getText(), 'compare');
+
       // Close the AI document
-      const uri = aiDocument.uri;
-      async function deleteAIDocument() {
-        try {
-          // Close any open editors with the AI-generated document
-          const aiEditors = vscode.window.visibleTextEditors.filter(editor => editor.document.uri.toString() === uri.toString());
-          for (const editor of aiEditors) {
-            await vscode.commands.executeCommand('workbench.action.closeActiveEditor', editor);
-          }
-
-          // Delete the AI-generated document
-          await vscode.workspace.fs.delete(uri);
-        } catch (error) {
-          console.error('Error deleting AI-generated document:', error);
-        }
-      }
-
-      // Execute the delete function when needed
       await deleteAIDocument();
-      aiDocument = undefined;
-      originalUri = undefined;
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to apply changes: ${error}`);
     }
+  }
+}
+
+async function handleClose(document: vscode.TextDocument) {
+  if (aiDocument && document.uri.toString() === aiDocument.uri.toString()) {
+    // Log the discarded changes
+    const originalDocument = await vscode.workspace.openTextDocument(originalUri!);
+    logPrompt('system', originalDocument.getText(), aiDocument.getText(), 'discarded');
+
+    // Delete the AI document
+    await deleteAIDocument();
+  }
+}
+
+async function deleteAIDocument() {
+  if (aiDocument) {
+    const uri = aiDocument.uri;
+    try {
+      // Close any open editors with the AI-generated document
+      const aiEditors = vscode.window.visibleTextEditors.filter(editor => editor.document.uri.toString() === uri.toString());
+      for (const editor of aiEditors) {
+        await vscode.commands.executeCommand('workbench.action.closeActiveEditor', editor);
+      }
+
+      // Delete the AI-generated document
+      await vscode.workspace.fs.delete(uri);
+    } catch (error) {
+      console.error('Error deleting AI-generated document:', error);
+    }
+    aiDocument = undefined;
+    originalUri = undefined;
   }
 }
 
@@ -244,6 +265,28 @@ async function callGrokLlamaAPI(systemPrompt: string, userPrompt: string): Promi
   });
   console.log("Calling Grok Llama 3 API with request:", systemPrompt, userPrompt);
   return msg.choices[0]?.message?.content || "";
+}
+
+function logPrompt(systemPrompt: string, userPrompt: string, response: string, applicationType: 'direct' | 'compare' | 'append' | 'discarded') {
+  const config = vscode.workspace.getConfiguration('tad');
+  const logFilePath = config.get<string>('logFilePath');
+
+  if (logFilePath) {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      model: currentModel,
+      systemPrompt,
+      userPrompt,
+      response,
+      applicationType
+    };
+
+    fs.appendFile(logFilePath, JSON.stringify(logEntry) + '\n', (err) => {
+      if (err) {
+        console.error('Error writing to log file:', err);
+      }
+    });
+  }
 }
 
 export function deactivate() {}

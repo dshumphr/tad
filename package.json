@@ -2,7 +2,7 @@
   "name": "tad",
   "displayName": "tad",
   "description": "AI Editor",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.81.0"
   },
@@ -37,7 +37,17 @@
         "command": "tadd.changeAIModel",
         "title": "Swap AI models"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Tad",
+      "properties": {
+        "tad.logFilePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the log file for Tad operations"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

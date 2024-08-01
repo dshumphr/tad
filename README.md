@@ -26,6 +26,9 @@ Experiment with different content in your `AI.md` file to fine-tune Tad's perfor
 
 ## Release Notes
 
+### 0.0.3
+- Support logging prompt inputs and outputs to a json file
+
 ### 0.0.2
 
 - Added support for Llama 3.1 80B via Groq API
