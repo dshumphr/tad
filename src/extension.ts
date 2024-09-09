@@ -101,7 +101,15 @@ async function callAI(content: string, buildContent: string, filePath: string): 
   const systemPrompt = `<Project>${buildContent}</Project>
 Here's a file within that project which has "AI" annotations where some action needs to take place. Please take action and generate the next version of this file. Respond with full code only.
 Absolutely do not ever wrap the code in any backticks. Remove any "AI" annotations from the output that have been addressed.
-<FileName>${path.basename(filePath)}</FileName>`;
+<FileName>${path.basename(filePath)}</FileName>
+
+Example
+  Input:
+    <Project>Hello</Project>
+    <Filename>main.py</Filename>
+    # AI: Write hello world
+  Output:
+    print("Hello, World!")`;
 
   const userPrompt = content;
 
